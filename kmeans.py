@@ -9,23 +9,31 @@ class Clusters:
         self.X = X
         self.k = k
         self.e = e
+        self.its = 0
 
         self.means = X[np.random.choice(len(X), k)]
 
         self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111)
+        self.ax = self.fig.add_subplot(121)
 
-        for i in range(max_it):
-            self.plot(i)
+        while self.its <= max_it:
+            # self.plot(i)
             self.clusters = self.veronoi(self.means)
-            new_means = [self.mean(c) for (m, c) in self.clusters]
+            new_means = [self.mean(c) for m, c in self.clusters]
             deltas = [self.l2(m, new_m)
                       for m, new_m in zip(self.means, new_means)]
             if np.max(deltas) < self.e:
-                print('converged in {} iterations'.format(i))
+                print('converged in {} iterations'.format(self.its))
                 break
+            self.its += 1
             self.means = new_means
             sleep(.5)
+
+        self.Y = np.zeros(len(X), dtype=int)
+        for i, (mean, cluster) in enumerate(self.clusters):
+            for x in cluster:
+                self.Y[x] = i
+
 
 
     @staticmethod
@@ -51,26 +59,64 @@ class Clusters:
 
         return [(means[m_idx], c) for m_idx, c in clusters.items()]
 
-    def plot(self, i):
-        self.ax.clear()
-        self.ax.set_title('iteration: {}'.format(i))
-        ax = self.fig.add_subplot(111)
-        veronoi = self.veronoi(self.means)
-        for i, (mean, cluster) in enumerate(veronoi):
-            c = 'C{}'.format(i % 9)
-            cluster = self.X[cluster]
-            ax.scatter(cluster[:, 0], cluster[:, 1], color=c, s=1)
-            ax.scatter([mean[0]], [mean[1]], color=c, s=100)
-        self.fig.show()
+
+def plot(ax, X, clusters):
+    clusters = sorted(clusters, key=lambda x: x[0][0])
+    for i, (mean, cluster) in enumerate(clusters):
+        color = 'C{}'.format(i % 9)
+        cluster = X[cluster]
+        ax.scatter(cluster[:, 0], cluster[:, 1], c=color, s=1)
+        ax.scatter([mean[0]], [mean[1]], c=color, s=100)
+
+
+def plot_actual(ax, df, features):
+    clusters = []
+    for i, s in enumerate(df.Species.unique()):
+        cluster = df[df.Species == s][features].values
+        mean = np.mean(cluster, axis=0)
+        clusters.append((mean, cluster))
+
+    clusters = sorted(clusters, key=lambda x: x[0][0])
+    for i, (mean, cluster) in enumerate(clusters):
+        color = 'C{}'.format(i % 9)
+        ax.scatter(cluster[:, 0], cluster[:, 1], c=color, s=1)
+        ax.scatter([mean[0]], [mean[1]], c=color, s=100)
+
 
 
 
 
 if __name__ == '__main__':
     df = pd.read_csv('iris.csv')
-    print(df.columns)
-    df_length = df[['SepalLengthCm', 'PetalLengthCm']]
-    # df_length = df[['SepalLengthCm', 'PetalLengthCm',
-    #                 'SepalWidthCm', 'PetalWidthCm']]
-    df['Species'].unique()
-    clusters = Clusters(df_length.values, k=3, e=.01)
+
+    features = [
+        # 'SepalLengthCm',
+        # 'PetalLengthCm',
+        'SepalWidthCm',
+        'PetalWidthCm'
+    ]
+
+    df_length = df[features]
+
+    k = len(df.Species.unique())
+    clu = Clusters(df_length.values, k=k, e=.01)
+
+
+    df['Cluster'] = clu.Y
+
+    df.to_csv('out.csv')
+
+    for s in df.Species.unique():
+        for c in range(k):
+            count = len(df[(df.Cluster == c) & (df.Species == s)])
+            print('species={:20s} cluster={}: {:5d}'.format(s, c, count))
+
+
+    fig = plt.figure(figsize=(10, 5))
+    ax1 = fig.add_subplot(121)
+    ax2 = fig.add_subplot(122)
+    plot(ax1, clu.X, clu.clusters)
+    plot_actual(ax2, df, features)
+    ax1.set_title('kmeans')
+    ax2.set_title('actual')
+    fig.show()

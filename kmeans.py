@@ -1,17 +1,27 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from time import sleep
 
 
 class KMeans:
-    def __init__(self, X, k, e, max_it=50):
+    def __init__(self, X, k, e, max_its=50):
+        """
+        :param X: input data
+        :param k: number of clusters
+        :param e: convergence threshold
+        :param max_its: maximum iterations
+
+        self.clusters: computed clusters
+        self.Y: array of labels matching X
+        """
         self.X = X
         self.its = 0
 
-        self.clusters, self.Y = self.compute(k, e, max_it)
+        self.clusters = self.compute(k, e, max_its)
+        self.Y = self.label(self.clusters)
 
-    def compute(self, k, e, max_it):
+
+    def compute(self, k, e, max_its):
         means = self.X[np.random.choice(len(self.X), k)]
         while True:
             clusters = self.veronoi(means)
@@ -25,17 +35,15 @@ class KMeans:
             ]
             means = new_means
             self.its += 1
-            if np.max(deltas) < e:
-                print('converged in {} iterations'.format(self.its))
-                break
-            if self.its > max_it:
-                print('maximum iterations reached')
-                break
+            if np.max(deltas) < e or self.its == max_its:
+                return clusters
+
+    def label(self, clusters):
         Y = np.zeros(len(self.X), dtype=int)
         for cluster_id, (mean, member_ids) in enumerate(clusters):
             for member_id in member_ids:
                 Y[member_id] = cluster_id
-        return clusters, Y
+        return Y
 
 
     @staticmethod
@@ -65,18 +73,21 @@ class KMeans:
         ]
 
 
-def plot(ax, clusters):
-    ax.grid()
+def plot(ax, clusters, features):
     clusters = sorted(clusters, key=lambda x: x[0][0])
     for i, (mean, members) in enumerate(clusters):
         color = 'C{}'.format(i % 9)
         ax.scatter(members[:, 0], members[:, 1], c=color, s=1)
         ax.scatter([mean[0]], [mean[1]], c=color, s=100)
 
+    ax.grid()
+    ax.set_xlabel(features[0])
+    ax.set_ylabel(features[1])
 
-def plot_kmeans(ax, X, clusters):
+
+def plot_kmeans(ax, X, clusters, features):
     clusters = [(mean, X[member_ids]) for mean, member_ids in clusters]
-    plot(ax, clusters)
+    plot(ax, clusters, features)
 
 
 def plot_actual(ax, df, features):
@@ -85,8 +96,7 @@ def plot_actual(ax, df, features):
         cluster = df[df.Species == s][features].values
         mean = np.mean(cluster, axis=0)
         clusters.append((mean, cluster))
-
-    plot(ax, clusters)
+    plot(ax, clusters, features)
 
 
 
@@ -101,27 +111,28 @@ if __name__ == '__main__':
         'PetalWidthCm'
     ]
 
-    df_length = df[features]
-
+    df_features = df[features]
     k = len(df.Species.unique())
-    kms = KMeans(df_length.values, k=k, e=.01)
+    kms = KMeans(df_features.values, k=k, e=.01)
 
-
-    df['Cluster'] = kms.Y
+    df['Label'] = kms.Y
 
     df.to_csv('out.csv')
+
+    print('features: {}'.format(features))
+    print('iterations: {}'.format(kms.its))
 
     for s in df.Species.unique():
         print('')
         for c in range(k):
-            count = len(df[(df.Cluster == c) & (df.Species == s)])
-            print('species={:20s} cluster={}: {:5d}'.format(s, c, count))
+            count = len(df[(df.Label == c) & (df.Species == s)])
+            print('species = {:20s} label = {}: {:5d}'.format(s, c, count))
 
 
     fig = plt.figure(figsize=(10, 4))
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
-    plot_kmeans(ax1, kms.X, kms.clusters)
+    plot_kmeans(ax1, kms.X, kms.clusters, features)
     plot_actual(ax2, df, features)
     ax1.set_title('k-means')
     ax2.set_title('actual')

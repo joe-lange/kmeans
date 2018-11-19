@@ -59,7 +59,7 @@ class KMeans:
         d = np.zeros((len(means), len(self.X)))
         for i, mean in enumerate(means):
             d[i, :] = [self.l2(mean, x) for x in self.X]
-
+qwdegfewqrgwerwgcxwer
         clusters = {mean_id: [] for mean_id in range(len(means))}
 
         for j, x in enumerate(self.X):
